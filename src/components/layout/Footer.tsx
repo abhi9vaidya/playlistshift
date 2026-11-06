@@ -1,7 +1,8 @@
 import React from "react";
 import Link from "next/link";
 import { siteConfig } from "@/config/site";
-import { Music, Shield, Sparkles } from "lucide-react";
+import { BrandLogo } from "../ui/BrandLogo";
+import { Shield, Sparkles } from "lucide-react";
 
 export const Footer: React.FC = () => {
   return (
@@ -10,15 +11,8 @@ export const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
           {/* Brand info */}
           <div className="space-y-4 md:col-span-1">
-            <Link href="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brandGreen to-brandPurple p-[1px]">
-                <div className="w-full h-full bg-[#090A0F] rounded-[7px] flex items-center justify-center">
-                  <Music className="w-4 h-4 text-brandGreen" />
-                </div>
-              </div>
-              <span className="text-lg font-bold text-white">
-                Playlist<span className="text-brandGreen">Shift</span>
-              </span>
+            <Link href="/" className="inline-flex">
+              <BrandLogo size="sm" />
             </Link>
             <p className="text-sm text-textMuted leading-relaxed">
               {siteConfig.description}

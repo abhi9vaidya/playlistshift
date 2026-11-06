@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { siteConfig } from "@/config/site";
 import { Button } from "../ui/Button";
-import { ArrowRight, LogOut, Menu, Music, User, X } from "lucide-react";
+import { BrandLogo } from "../ui/BrandLogo";
+import { ArrowRight, LogOut, Menu, User, X } from "lucide-react";
 import { UserSessionData } from "@/types";
 
 export const Navbar: React.FC = () => {
@@ -45,17 +46,8 @@ export const Navbar: React.FC = () => {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brandGreen via-emerald-500 to-brandPurple p-[1px] shadow-lg shadow-brandGreen/10 group-hover:shadow-brandGreen/25 transition-all">
-            <div className="w-full h-full bg-[#090A0F] rounded-[11px] flex items-center justify-center">
-              <Music className="w-5 h-5 text-brandGreen group-hover:scale-110 transition-transform" />
-            </div>
-          </div>
-          <div>
-            <span className="text-xl font-bold tracking-tight text-white flex items-center gap-1.5">
-              Playlist<span className="text-brandGreen">Shift</span>
-            </span>
-          </div>
+        <Link href="/" className="group inline-flex">
+          <BrandLogo size="md" />
         </Link>
 
         {/* Desktop Navigation */}

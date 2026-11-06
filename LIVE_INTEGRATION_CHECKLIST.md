@@ -92,35 +92,49 @@ This document provides the definitive verification matrix, test scenarios, expec
 
 ---
 
-## 4. Quota Budget & Live Consumption Analysis
+## 4. Quota Budget & Live Consumption Analysis (Google's Granular System)
 
-Google YouTube Data API v3 operates on a default quota of **10,000 units/day**:
+Google YouTube Data API v3 operates on two distinct quota buckets:
 
-$$\text{Total Units} = (\text{Tracks} \times 100) + 50 + (\text{Tracks} \times 50) = 50 + (\text{Tracks} \times 150)$$
+1. **Search Queries Bucket:**
+   - `search.list`: Costs **1 quota unit** from a dedicated Search Queries pool.
+   - **Default limit:** **100 requests per day**.
+2. **General Quota Bucket:**
+   - `playlists.insert`: Costs **50 units**.
+   - `playlistItems.insert`: Costs **50 units per video**.
+   - **Default limit:** **10,000 units per day**.
+
+$$\text{General Quota Units} = 50 + (\text{Tracks} \times 50)$$
+$$\text{Search Queries Units} = \text{Tracks} \times 1$$
 
 For a **20-song playlist**:
-- 20 Search calls (`search.list` @ 100 units): $2,000\text{ units}$
-- 1 Playlist creation (`playlists.insert` @ 50 units): $50\text{ units}$
-- 20 Video insertions (`playlistItems.insert` @ 50 units): $1,000\text{ units}$
-- **Total:** $\mathbf{3,050\text{ units}}$
+- 20 YouTube searches: **20 Search Queries units** (from the 100/day pool).
+- 1 Playlist creation: **50 General Quota units**.
+- 20 Video insertions: **1,000 General Quota units**.
+- **Total:** $\mathbf{1,050\text{ General Quota units}}$ plus $\mathbf{20\text{ Search Queries}}$.
 
-### Crucial Search Limits:
-In addition to the 10,000 unit daily pool, Google enforces queries-per-minute and per-user quotas. PlaylistShift protects against hitting these ceilings through:
-1. In-flight request deduplication (`deduplicateInFlight`).
-2. 24-hour LRU in-memory query cache (`youtubeSearchCache`).
+### Real-World Throughput:
+The 100 Search Queries/day bucket is the primary ceiling. A full 20-track conversion consumes 20 queries, enabling approximately **five 20-track conversions per day** on the default free tier.
+
+PlaylistShift protects against hitting these ceilings through:
+1. In-flight search promise deduplication (`deduplicateInFlight`).
+2. Instance-local 24-hour LRU query cache (`youtubeSearchCache`) *(Note: instance-local only; does not provide global distributed caching across separate Vercel lambda instances)*.
 3. Client-side batch chunking (3 concurrent calls maximum).
-4. Exponential backoff retry with immediate short-circuiting on `quotaExceeded` or `rateLimitExceeded`.
+4. Separate error handling for Search Queries exhaustion vs. General Quota exhaustion vs. transient rate limiting.
 
 ---
 
 ## 5. Outstanding External Verification Requirements
 
-1. **Google OAuth Verification:**
-   - In Staging, the application operates in **Testing mode** (accessible by registered Test Users).
-   - Before public commercial release with arbitrary Google users, submit an **OAuth Verification Request** in Google Cloud Console. Because PlaylistShift requests `youtube.force-ssl` (Sensitive, not Restricted), Google requires a YouTube video demonstration of the OAuth flow and a published privacy policy.
-2. **Spotify Quota Extension:**
-   - In Development Mode, Spotify restricts client credentials to **5 test users**.
-   - If you want arbitrary public Spotify URLs resolved server-side without test accounts, apply for Spotify Quota Extension in the Spotify Developer Dashboard.
-   - **Alternative:** Keep CSV and Text Import as the primary unrestricted public path.
+1. **Google OAuth Testing Mode & 7-Day Token Expiry:**
+   - In Staging, the application operates in **Testing mode** (accessible by up to 100 registered Test Users).
+   - **Important Note:** In Google OAuth Testing mode, authorizations and refresh tokens for test accounts expire after **seven days**, requiring re-authorization during development and staging tests.
+   - Before public commercial release for arbitrary Google accounts, submit an **OAuth Verification Request** in Google Cloud Console. Because PlaylistShift requests `youtube.force-ssl` (Sensitive, not Restricted), Google requires a YouTube video demonstration of the OAuth flow and a published privacy policy.
+2. **Spotify February 2026 Development Mode Restrictions:**
+   - In Development Mode, Spotify restricts client credentials to **5 registered test users**, and the developer account owner must possess **Spotify Premium**.
+   - The integration relies exclusively on Spotify's officially supported endpoints: `GET https://api.spotify.com/v1/playlists/{id}` and `GET https://api.spotify.com/v1/tracks/{id}`.
+   - For arbitrary public Spotify URLs without registering test accounts, apply for Spotify Quota Extension in the Spotify Developer Dashboard.
+   - **Primary Public Route:** CSV and Text Import remain the default unrestricted public path.
 3. **Google AdSense:**
    - AdSense requires a live domain, original content, and policy compliance. Keep `NEXT_PUBLIC_ADSENSE_ENABLED=false` until Google approves the site.
+

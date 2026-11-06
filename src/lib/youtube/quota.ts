@@ -5,7 +5,13 @@ interface CacheEntry<T> {
 
 /**
  * In-memory TTL cache to deduplicate YouTube search queries
- * and conserve YouTube Data API quota within active serverless containers.
+ * within an active warm serverless instance.
+ *
+ * NOTE ON SERVERLESS PERSISTENCE:
+ * This cache is instance-local. On Vercel serverless functions, separate container
+ * instances do NOT share memory, and cold starts will reset this map.
+ * It provides effective short-term optimization and prevents redundant queries during
+ * a warm session, but does NOT guarantee global distributed quota persistence.
  */
 class SearchCache {
   private cache = new Map<string, CacheEntry<unknown>>();
@@ -46,8 +52,8 @@ export const youtubeSearchCache = new SearchCache();
 
 /**
  * In-flight request deduplication map.
- * If multiple identical search queries arrive simultaneously, they share the same Promise
- * rather than triggering duplicate outgoing HTTP calls and consuming extra quota units.
+ * If multiple identical search queries arrive concurrently within the same instance,
+ * they share the active Promise rather than making duplicated outgoing HTTP requests.
  */
 const inFlightRequests = new Map<string, Promise<unknown>>();
 
@@ -65,8 +71,7 @@ export function deduplicateInFlight<T>(key: string, fetcher: () => Promise<T>): 
 }
 
 /**
- * In-memory sliding window rate limiter per client IP.
- * Protects serverless functions from burst attacks and prevents rapid quota depletion.
+ * Sliding window rate limiter per client IP (instance-local).
  */
 interface RateLimitRecord {
   count: number;
@@ -97,33 +102,58 @@ export function checkRateLimit(
 }
 
 /**
- * Calculates YouTube API quota unit consumption based on Google's official pricing:
- * - search.list: 100 units per call
- * - playlists.insert: 50 units
- * - playlistItems.insert: 50 units per song item
+ * Calculates YouTube API quota usage under Google's granular quota system:
+ *
+ * 1. Search Queries Quota Bucket:
+ *    - search.list: 1 unit per request from a separate Search Queries bucket
+ *      (Default limit: 100 search requests/day).
+ *
+ * 2. General Quota Bucket:
+ *    - playlists.insert: 50 units
+ *    - playlistItems.insert: 50 units per video inserted
+ *      (Default limit: 10,000 general units/day).
+ *
+ * Example (20-song playlist):
+ *    - 20 YouTube searches = 20 Search Queries quota units.
+ *    - 1 playlist creation = 50 general quota units.
+ *    - 20 playlist insertions = 1,000 general quota units.
+ *    - Total = 1,050 general quota units PLUS 20 search queries.
+ *
+ * Notice: The 100 Search Queries/day ceiling is the primary constraint,
+ * allowing approximately five 20-track conversions per day on default free tiers.
  */
 export function estimatePlaylistQuotaCost(trackCount: number): {
-  searchUnits: number;
+  searchQueries: number;
   creationUnits: number;
   insertionUnits: number;
-  totalEstimatedUnits: number;
+  totalGeneralUnits: number;
+  searchQueriesDayLimit: number;
+  generalQuotaDayLimit: number;
+  estimatedConversionsPerDay: number;
 } {
-  const searchUnits = trackCount * 100;
+  const searchQueries = trackCount; // 1 unit per search
   const creationUnits = 50;
   const insertionUnits = trackCount * 50;
-  const totalEstimatedUnits = searchUnits + creationUnits + insertionUnits;
+  const totalGeneralUnits = creationUnits + insertionUnits;
+
+  const searchQueriesDayLimit = 100;
+  const generalQuotaDayLimit = 10000;
+  const estimatedConversionsPerDay = Math.floor(searchQueriesDayLimit / Math.max(1, trackCount));
 
   return {
-    searchUnits,
+    searchQueries,
     creationUnits,
     insertionUnits,
-    totalEstimatedUnits,
+    totalGeneralUnits,
+    searchQueriesDayLimit,
+    generalQuotaDayLimit,
+    estimatedConversionsPerDay,
   };
 }
 
 /**
  * Utility to retry an async task with exponential backoff on transient errors (e.g. 503, 500, 429).
- * Strictly aborts immediately if quota is exceeded or authorization fails.
+ * Strictly aborts immediately if quota is exhausted or authorization fails.
  */
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
@@ -142,10 +172,12 @@ export async function retryWithBackoff<T>(
       const errorMsg = String(err);
       if (
         errorMsg.includes("quotaExceeded") ||
+        errorMsg.includes("searchQuotaExceeded") ||
         errorMsg.includes("401") ||
         errorMsg.includes("403") ||
         errorMsg.includes("invalid_grant") ||
-        errorMsg.includes("YouTubeQuotaExceededError")
+        errorMsg.includes("YouTubeSearchQuotaExceededError") ||
+        errorMsg.includes("YouTubeGeneralQuotaExceededError")
       ) {
         throw err;
       }

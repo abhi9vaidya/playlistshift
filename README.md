@@ -174,7 +174,17 @@ pnpm test
 ## 🔒 Security & Privacy Notice
 
 - **No Passwords Stored:** All authentication uses Google OAuth 2.0 with secure PKCE state verification.
-- **Stateless Encrypted Sessions:** Access tokens and refresh tokens are stored inside signed HTTP-only cookies (`ps_session`) with `SameSite=Lax`.
-- **YouTube API Quotas:** The app implements smart 24-hour search caching and exponential backoff throttling to conserve daily quota units.
+- **Stateless Encrypted Sessions:** Access tokens and refresh tokens are stored inside signed HTTP-only cookies (`ps_session`) with `SameSite=Lax`. In-memory caching and deduplication run locally within active serverless containers; note that Vercel serverless lambdas do not share memory across separate instances.
+- **Google OAuth Testing Mode:** In development/staging mode, up to 100 registered test accounts can authenticate; note that Google expires refresh tokens for non-verified testing applications after **7 days**, requiring re-authorization during staging.
+- **YouTube Granular Quota Architecture:**
+  - Google enforces two separate buckets:
+    - **Search Queries Bucket:** `search.list` consumes **1 unit per request** from a dedicated Search Queries bucket, which defaults to **100 requests per day**.
+    - **General Quota Bucket:** `playlists.insert` consumes **50 units**, and `playlistItems.insert` consumes **50 units per video** from a **10,000 units/day** general bucket.
+  - **20-Track Playlist Example:**
+    - 20 YouTube searches = 20 Search Queries units (out of 100/day limit).
+    - 1 playlist creation = 50 general units.
+    - 20 playlist insertions = 1,000 general units.
+    - **Total:** 1,050 general units + 20 Search Queries.
+    - *Practical throughput:* Approximately **five 20-track conversions per day** under default free tier search limits.
 - **Disclaimer:** Spotify is a trademark of Spotify AB. YouTube is a trademark of Google LLC. PlaylistShift is an independent conversion utility and is not affiliated with or endorsed by either company.
 

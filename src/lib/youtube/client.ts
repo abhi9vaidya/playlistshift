@@ -14,17 +14,38 @@ export interface YouTubeCandidateRaw {
 }
 
 export class YouTubeQuotaExceededError extends Error {
+  code: "SEARCH_QUOTA_EXCEEDED" | "GENERAL_QUOTA_EXCEEDED" | "RATE_LIMITED";
   constructor(
-    message = "YouTube Data API daily quota limit (10,000 units) reached. Please try again tomorrow or sign in with your own Google account."
+    message = "YouTube Data API daily quota limit reached. Please try again tomorrow or sign in with your own Google account.",
+    code: "SEARCH_QUOTA_EXCEEDED" | "GENERAL_QUOTA_EXCEEDED" | "RATE_LIMITED" = "GENERAL_QUOTA_EXCEEDED"
   ) {
     super(message);
     this.name = "YouTubeQuotaExceededError";
+    this.code = code;
+  }
+}
+
+export class YouTubeSearchQuotaExceededError extends YouTubeQuotaExceededError {
+  constructor(
+    message = "YouTube Search Queries daily limit (100 requests/day) has been reached. Search calls are paused until midnight Pacific Time. Previously matched songs can still be exported to YouTube."
+  ) {
+    super(message, "SEARCH_QUOTA_EXCEEDED");
+    this.name = "YouTubeSearchQuotaExceededError";
+  }
+}
+
+export class YouTubeGeneralQuotaExceededError extends YouTubeQuotaExceededError {
+  constructor(
+    message = "YouTube Data API daily general quota (10,000 units/day) has been reached. Playlist creation and video insertion are paused until the daily quota resets at midnight Pacific Time."
+  ) {
+    super(message, "GENERAL_QUOTA_EXCEEDED");
+    this.name = "YouTubeGeneralQuotaExceededError";
   }
 }
 
 export class YouTubeRateLimitExceededError extends Error {
   constructor(
-    message = "YouTube search rate limit temporarily reached. Please wait a moment before searching more tracks."
+    message = "YouTube API rate limit temporarily reached. Please wait a moment before searching or exporting more tracks."
   ) {
     super(message);
     this.name = "YouTubeRateLimitExceededError";
@@ -109,8 +130,9 @@ export async function searchYouTubeVideos(
 
     if (!res.ok) {
       const errorReason = data?.error?.errors?.[0]?.reason || "";
-      if (errorReason === "quotaExceeded") {
-        throw new YouTubeQuotaExceededError();
+      const errorMsg = data?.error?.message || "";
+      if (errorReason === "quotaExceeded" || errorReason === "searchQuotaExceeded" || errorMsg.toLowerCase().includes("quota")) {
+        throw new YouTubeSearchQuotaExceededError();
       }
       if (errorReason === "rateLimitExceeded" || errorReason === "userRateLimitExceeded" || res.status === 429) {
         throw new YouTubeRateLimitExceededError();
@@ -216,8 +238,11 @@ export async function createYouTubePlaylist(
   const data = await res.json();
   if (!res.ok) {
     const errorReason = data?.error?.errors?.[0]?.reason || "";
-    if (errorReason === "quotaExceeded" || res.status === 403) {
-      throw new YouTubeQuotaExceededError();
+    if (errorReason === "quotaExceeded") {
+      throw new YouTubeGeneralQuotaExceededError();
+    }
+    if (errorReason === "rateLimitExceeded" || errorReason === "userRateLimitExceeded" || res.status === 429) {
+      throw new YouTubeRateLimitExceededError();
     }
     throw new Error(data?.error?.message || `Failed to create playlist (${res.status})`);
   }
@@ -280,8 +305,8 @@ export async function insertVideosIntoPlaylist(
 
       if (!res.ok) {
         const reason = data?.error?.errors?.[0]?.reason || data?.error?.message || "Failed to insert";
-        if (reason === "quotaExceeded" || res.status === 403) {
-          throw new YouTubeQuotaExceededError();
+        if (reason === "quotaExceeded") {
+          throw new YouTubeGeneralQuotaExceededError();
         }
         skippedItems.push({
           title: item.title,

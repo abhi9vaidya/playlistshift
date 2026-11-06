@@ -27,17 +27,21 @@ describe("YouTube API Quota Management & Optimization", () => {
     expect(res2).toEqual(res3);
   });
 
-  it("calculates official YouTube API quota costs accurately", () => {
-    // 20 songs: 20 searches (2000 units), 1 playlist creation (50 units), 20 insertions (1000 units)
+  it("calculates official YouTube API quota costs under Google's granular quota system", () => {
+    // 20 songs: 20 Search Queries (from 100/day bucket), 1 playlist creation (50 units), 20 insertions (1000 units)
     const cost20 = estimatePlaylistQuotaCost(20);
-    expect(cost20.searchUnits).toBe(2000);
+    expect(cost20.searchQueries).toBe(20);
     expect(cost20.creationUnits).toBe(50);
     expect(cost20.insertionUnits).toBe(1000);
-    expect(cost20.totalEstimatedUnits).toBe(3050);
+    expect(cost20.totalGeneralUnits).toBe(1050);
+    expect(cost20.searchQueriesDayLimit).toBe(100);
+    expect(cost20.generalQuotaDayLimit).toBe(10000);
+    expect(cost20.estimatedConversionsPerDay).toBe(5);
 
     // Single song
     const cost1 = estimatePlaylistQuotaCost(1);
-    expect(cost1.totalEstimatedUnits).toBe(200);
+    expect(cost1.searchQueries).toBe(1);
+    expect(cost1.totalGeneralUnits).toBe(100); // 50 creation + 50 insertion
   });
 
   it("enforces sliding window rate limits per client IP", () => {

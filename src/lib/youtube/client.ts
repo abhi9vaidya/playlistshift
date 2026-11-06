@@ -1,4 +1,4 @@
-import { youtubeSearchCache, retryWithBackoff } from "./quota";
+import { youtubeSearchCache, deduplicateInFlight, retryWithBackoff } from "./quota";
 import { parseIsoDurationMs } from "../matching/similarity";
 import { PrivacyStatus, YouTubePlaylistCreationResult } from "@/types";
 
@@ -14,7 +14,9 @@ export interface YouTubeCandidateRaw {
 }
 
 export class YouTubeQuotaExceededError extends Error {
-  constructor(message = "YouTube Data API daily quota exceeded. Please try again tomorrow or sign in with your Google account to use your own quota.") {
+  constructor(
+    message = "YouTube Data API daily quota limit reached. Please try again tomorrow or sign in with your own Google account."
+  ) {
     super(message);
     this.name = "YouTubeQuotaExceededError";
   }
@@ -43,117 +45,119 @@ function decodeHtmlEntities(str: string): string {
 
 /**
  * Searches YouTube for video candidates matching a query string.
- * Uses search cache to minimize API quota consumption.
+ * Employs in-memory caching and in-flight request deduplication to conserve YouTube Data API quota.
  */
 export async function searchYouTubeVideos(
   query: string,
   maxResults = 5,
   userAccessToken?: string
 ): Promise<YouTubeCandidateRaw[]> {
-  const cacheKey = `yt_search_${query.toLowerCase().trim()}_${maxResults}`;
+  const cleanQuery = query.toLowerCase().trim();
+  const cacheKey = `yt_search_${cleanQuery}_${maxResults}`;
+
   const cached = youtubeSearchCache.get<YouTubeCandidateRaw[]>(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const apiKey = process.env.YOUTUBE_API_KEY;
+  return deduplicateInFlight(cacheKey, async () => {
+    const apiKey = process.env.YOUTUBE_API_KEY;
 
-  if (!userAccessToken && !apiKey) {
-    throw new Error(
-      "YouTube integration is not configured. Either connect your Google account or provide a YOUTUBE_API_KEY in environment variables."
-    );
-  }
+    if (!userAccessToken && !apiKey) {
+      throw new Error(
+        "YouTube integration is not configured. Either connect your Google account or provide a YOUTUBE_API_KEY in environment variables."
+      );
+    }
 
-  const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
-  searchUrl.searchParams.set("part", "snippet");
-  searchUrl.searchParams.set("type", "video");
-  searchUrl.searchParams.set("videoCategoryId", "10"); // Music category
-  searchUrl.searchParams.set("maxResults", Math.min(maxResults, 10).toString());
-  searchUrl.searchParams.set("q", query);
+    const searchUrl = new URL("https://www.googleapis.com/youtube/v3/search");
+    searchUrl.searchParams.set("part", "snippet");
+    searchUrl.searchParams.set("type", "video");
+    searchUrl.searchParams.set("videoCategoryId", "10"); // Music category
+    searchUrl.searchParams.set("maxResults", Math.min(maxResults, 10).toString());
+    searchUrl.searchParams.set("q", query);
 
-  if (!userAccessToken && apiKey) {
-    searchUrl.searchParams.set("key", apiKey);
-  }
+    if (!userAccessToken && apiKey) {
+      searchUrl.searchParams.set("key", apiKey);
+    }
 
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-  };
-  if (userAccessToken) {
-    headers["Authorization"] = `Bearer ${userAccessToken}`;
-  }
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    };
+    if (userAccessToken) {
+      headers["Authorization"] = `Bearer ${userAccessToken}`;
+    }
 
-  const res = await retryWithBackoff(async () => {
-    const r = await fetch(searchUrl.toString(), {
-      method: "GET",
-      headers,
-      next: { revalidate: 3600 },
+    const res = await retryWithBackoff(async () => {
+      const r = await fetch(searchUrl.toString(), {
+        method: "GET",
+        headers,
+        next: { revalidate: 3600 },
+      });
+      return r;
     });
-    return r;
-  });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  if (!res.ok) {
-    const errorReason = data?.error?.errors?.[0]?.reason || "";
-    if (errorReason === "quotaExceeded" || res.status === 403) {
-      if (errorReason === "quotaExceeded") {
+    if (!res.ok) {
+      const errorReason = data?.error?.errors?.[0]?.reason || "";
+      if (errorReason === "quotaExceeded" || res.status === 403) {
         throw new YouTubeQuotaExceededError();
       }
+      throw new Error(data?.error?.message || `YouTube search failed with status ${res.status}`);
     }
-    throw new Error(data?.error?.message || `YouTube search failed with status ${res.status}`);
-  }
 
-  const items = data.items || [];
-  if (items.length === 0) {
-    youtubeSearchCache.set(cacheKey, []);
-    return [];
-  }
+    const items = data.items || [];
+    if (items.length === 0) {
+      youtubeSearchCache.set(cacheKey, []);
+      return [];
+    }
 
-  const videoIds = items.map((item: any) => item.id?.videoId).filter(Boolean);
+    const videoIds = items.map((item: any) => item.id?.videoId).filter(Boolean);
 
-  // Fetch duration details for these video IDs to boost matching precision
-  const durationsMap = new Map<string, number>();
-  if (videoIds.length > 0) {
-    try {
-      const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
-      detailsUrl.searchParams.set("part", "contentDetails");
-      detailsUrl.searchParams.set("id", videoIds.join(","));
-      if (!userAccessToken && apiKey) {
-        detailsUrl.searchParams.set("key", apiKey);
-      }
-
-      const detRes = await fetch(detailsUrl.toString(), { headers });
-      if (detRes.ok) {
-        const detData = await detRes.json();
-        for (const v of detData.items || []) {
-          const ms = parseIsoDurationMs(v.contentDetails?.duration);
-          if (ms) durationsMap.set(v.id, ms);
+    // Fetch duration details for these video IDs to boost matching precision
+    const durationsMap = new Map<string, number>();
+    if (videoIds.length > 0) {
+      try {
+        const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
+        detailsUrl.searchParams.set("part", "contentDetails");
+        detailsUrl.searchParams.set("id", videoIds.join(","));
+        if (!userAccessToken && apiKey) {
+          detailsUrl.searchParams.set("key", apiKey);
         }
+
+        const detRes = await fetch(detailsUrl.toString(), { headers });
+        if (detRes.ok) {
+          const detData = await detRes.json();
+          for (const v of detData.items || []) {
+            const ms = parseIsoDurationMs(v.contentDetails?.duration);
+            if (ms) durationsMap.set(v.id, ms);
+          }
+        }
+      } catch {
+        // Non-fatal if video duration details lookup fails
       }
-    } catch {
-      // Non-fatal if video duration details lookup fails
     }
-  }
 
-  const results: YouTubeCandidateRaw[] = items.map((item: any) => {
-    const videoId = item.id?.videoId;
-    return {
-      videoId,
-      title: decodeHtmlEntities(item.snippet?.title || ""),
-      channelTitle: decodeHtmlEntities(item.snippet?.channelTitle || ""),
-      channelId: item.snippet?.channelId,
-      description: item.snippet?.description,
-      thumbnailUrl:
-        item.snippet?.thumbnails?.medium?.url ||
-        item.snippet?.thumbnails?.default?.url ||
-        `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-      durationMs: durationsMap.get(videoId),
-      publishedAt: item.snippet?.publishedAt,
-    };
+    const results: YouTubeCandidateRaw[] = items.map((item: any) => {
+      const videoId = item.id?.videoId;
+      return {
+        videoId,
+        title: decodeHtmlEntities(item.snippet?.title || ""),
+        channelTitle: decodeHtmlEntities(item.snippet?.channelTitle || ""),
+        channelId: item.snippet?.channelId,
+        description: item.snippet?.description,
+        thumbnailUrl:
+          item.snippet?.thumbnails?.medium?.url ||
+          item.snippet?.thumbnails?.default?.url ||
+          `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        durationMs: durationsMap.get(videoId),
+        publishedAt: item.snippet?.publishedAt,
+      };
+    });
+
+    youtubeSearchCache.set(cacheKey, results);
+    return results;
   });
-
-  youtubeSearchCache.set(cacheKey, results);
-  return results;
 }
 
 /**
@@ -197,7 +201,7 @@ export async function createYouTubePlaylist(
   const data = await res.json();
   if (!res.ok) {
     const errorReason = data?.error?.errors?.[0]?.reason || "";
-    if (errorReason === "quotaExceeded") {
+    if (errorReason === "quotaExceeded" || res.status === 403) {
       throw new YouTubeQuotaExceededError();
     }
     throw new Error(data?.error?.message || `Failed to create playlist (${res.status})`);
@@ -233,7 +237,7 @@ export async function insertVideosIntoPlaylist(
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
 
-    // Throttle to respect YouTube API quotas and avoid 429
+    // Throttle to respect YouTube API rate limits and avoid 429
     if (i > 0) {
       await new Promise((r) => setTimeout(r, 250));
     }
@@ -261,7 +265,7 @@ export async function insertVideosIntoPlaylist(
 
       if (!res.ok) {
         const reason = data?.error?.errors?.[0]?.reason || data?.error?.message || "Failed to insert";
-        if (reason === "quotaExceeded") {
+        if (reason === "quotaExceeded" || res.status === 403) {
           throw new YouTubeQuotaExceededError();
         }
         skippedItems.push({

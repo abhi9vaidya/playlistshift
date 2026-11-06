@@ -106,3 +106,4 @@ export const Features: React.FC = () => {
     </section>
   );
 };
+

@@ -3,6 +3,7 @@ import { constructMetadata } from "@/lib/seo/metadata";
 import { Link2, Search, Youtube, ShieldCheck, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
+import { AdSlot } from "@/components/ads/AdSlot";
 
 export const metadata = constructMetadata({
   title: "How to Convert Spotify Playlists to YouTube - Complete Guide",
@@ -71,6 +72,9 @@ export default function HowToConvertGuidePage() {
           </p>
         </section>
 
+        {/* Compliant AdSlot surrounded by educational content */}
+        <AdSlot placement="between-content" />
+
         <section className="space-y-4">
           <h3 className="text-xl font-bold text-white">Step 4: Connect Google & Choose Privacy</h3>
           <p>
@@ -93,3 +97,4 @@ export default function HowToConvertGuidePage() {
     </div>
   );
 }
+

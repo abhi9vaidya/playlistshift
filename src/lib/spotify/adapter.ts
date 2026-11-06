@@ -124,7 +124,7 @@ export async function fetchSpotifyPlaylist(playlistId: string): Promise<Playlist
     }
     if (res.status === 403) {
       throw new SpotifyError(
-        "Spotify access restricted. The Spotify app may be in Development Mode or restricted by Spotify's current developer policy.",
+        "Spotify access restricted. Spotify Development Mode is capped at 5 authorized users (and requires Spotify Premium for the developer account). Please use our free CSV or text importer to convert your playlist without restrictions.",
         "RESTRICTED"
       );
     }
@@ -220,3 +220,4 @@ export async function fetchSpotifyTrack(trackId: string): Promise<PlaylistData> 
     tracks: [track],
   };
 }
+

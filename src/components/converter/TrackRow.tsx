@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Track, YouTubeVideoMatch } from "@/types";
+import { Track } from "@/types";
 import { ConfidenceBadge } from "../matching/ConfidenceBadge";
 import { Button } from "../ui/Button";
 import {
@@ -13,7 +13,8 @@ import {
   Plus,
   Loader2,
   AlertCircle,
-  Video,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 
 interface TrackRowProps {
@@ -22,6 +23,10 @@ interface TrackRowProps {
   onOpenManualMatch: (track: Track) => void;
   onToggleExclude: (trackId: string) => void;
   onRetrySearch: (track: Track) => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }
 
 export const TrackRow: React.FC<TrackRowProps> = ({
@@ -30,6 +35,10 @@ export const TrackRow: React.FC<TrackRowProps> = ({
   onOpenManualMatch,
   onToggleExclude,
   onRetrySearch,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = false,
+  canMoveDown = false,
 }) => {
   const isExcluded = track.status === "excluded";
   const isSearching = track.status === "searching";
@@ -48,9 +57,31 @@ export const TrackRow: React.FC<TrackRowProps> = ({
           : "bg-surface hover:bg-surfaceHover/70 border-border hover:border-[#2A2F40]"
       }`}
     >
-      {/* Left: Original Track details */}
-      <div className="flex items-center gap-3.5 min-w-0 md:w-5/12">
-        <span className="text-xs font-mono text-textSubtle w-6 text-right shrink-0">
+      {/* Left: Reorder controls + Position + Original Track details */}
+      <div className="flex items-center gap-2.5 min-w-0 md:w-5/12">
+        {/* Reordering buttons */}
+        <div className="flex flex-col items-center justify-center shrink-0 opacity-40 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            disabled={!canMoveUp}
+            onClick={onMoveUp}
+            title="Move track up"
+            className="p-0.5 text-textMuted hover:text-white disabled:opacity-20 disabled:hover:text-textMuted transition-colors"
+          >
+            <ChevronUp className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            disabled={!canMoveDown}
+            onClick={onMoveDown}
+            title="Move track down"
+            className="p-0.5 text-textMuted hover:text-white disabled:opacity-20 disabled:hover:text-textMuted transition-colors"
+          >
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <span className="text-xs font-mono text-textSubtle w-5 text-right shrink-0">
           {index + 1}
         </span>
 

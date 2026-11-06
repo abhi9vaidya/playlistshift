@@ -135,11 +135,14 @@ pnpm test
    - Redirect URI: `http://localhost:3000/api/spotify/callback` (or your app URL).
    - Which API/SDKs are you planning to use: **Web API**.
 3. Under **Settings**, copy your **Client ID** and **Client Secret** into your `.env.local`.
-4. *Graceful Fallback:* If Spotify credentials are unconfigured or restricted in your region, PlaylistShift displays a helpful message and provides 1-click fallback to the **CSV & Text Importer**, keeping 100% of the conversion pipeline functional.
+4. *Policy & Development Mode Restrictions:*
+   - Per Spotify's developer policy, apps in **Development Mode** are strictly limited to **5 authorized test accounts**, and the developer account owner must have an active **Spotify Premium** subscription.
+   - For public visitors, **CSV and Text Import** is the primary, unlimited conversion workflow that requires no Spotify developer account, keeping 100% of the conversion pipeline functional for everyone.
 
 ### C. Google AdSense Activation Guide
-1. Once your website is deployed with original content and receiving organic traffic, apply at [Google AdSense](https://www.google.com/adsense/).
-2. When approved, set in your production environment variables:
+1. Review Google AdSense Publisher Policies. AdSense requires original, useful content, clean navigation, and strict compliance with placement policies.
+2. Ensure ads are never placed on non-content conversion workspaces or directly adjacent to action buttons.
+3. When your application is approved by Google AdSense, enable advertising in your production environment:
    ```env
    NEXT_PUBLIC_ADSENSE_ENABLED=true
    NEXT_PUBLIC_ADSENSE_CLIENT_ID=ca-pub-YOUR_ACTUAL_PUBLISHER_ID
@@ -174,3 +177,4 @@ pnpm test
 - **Stateless Encrypted Sessions:** Access tokens and refresh tokens are stored inside signed HTTP-only cookies (`ps_session`) with `SameSite=Lax`.
 - **YouTube API Quotas:** The app implements smart 24-hour search caching and exponential backoff throttling to conserve daily quota units.
 - **Disclaimer:** Spotify is a trademark of Spotify AB. YouTube is a trademark of Google LLC. PlaylistShift is an independent conversion utility and is not affiliated with or endorsed by either company.
+

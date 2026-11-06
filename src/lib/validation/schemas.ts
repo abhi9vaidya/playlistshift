@@ -69,3 +69,4 @@ export const createPlaylistRequestSchema = z.object({
     )
     .min(1, "At least one matched video is required to create a playlist"),
 });
+

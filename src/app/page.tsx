@@ -13,25 +13,22 @@ export default function HomePage() {
       {/* Hero Section */}
       <Hero />
 
-      {/* Conversion Tool Section */}
+      {/* Conversion Tool Section (Kept 100% clean of advertisements) */}
       <section className="px-4 sm:px-6 lg:px-8 -mt-6 sm:-mt-10 relative z-20">
         <ConversionTool />
       </section>
 
-      {/* Compliant Ad Slot below tool (disabled by default) */}
-      <AdSlot placement="below-hero" />
-
-      {/* How It Works */}
+      {/* How It Works Educational Section */}
       <HowItWorks />
+
+      {/* Mid-content Ad Slot placed strictly in content area, away from conversion buttons */}
+      <AdSlot placement="between-content" />
 
       {/* Features Showcase */}
       <Features />
 
       {/* Supported Imports */}
       <SupportedImports />
-
-      {/* Mid-content Ad Slot (disabled by default) */}
-      <AdSlot placement="between-content" />
 
       {/* FAQ Accordion */}
       <FaqSection />

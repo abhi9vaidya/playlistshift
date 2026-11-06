@@ -3,9 +3,23 @@ import { searchYouTubeRequestSchema } from "@/lib/validation/schemas";
 import { matchTrackOnYouTube } from "@/lib/matching/engine";
 import { getValidAccessToken } from "@/lib/auth/google-oauth";
 import { YouTubeQuotaExceededError } from "@/lib/youtube/client";
+import { checkRateLimit } from "@/lib/youtube/quota";
 
 export async function POST(request: NextRequest) {
   try {
+    const clientIp = request.headers.get("x-forwarded-for") || "unknown_client";
+    const rateLimit = checkRateLimit(clientIp, 40, 60000);
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: "Too many search requests. Please wait a moment before searching again.",
+          code: "RATE_LIMITED",
+        },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const validated = searchYouTubeRequestSchema.safeParse(body);
 

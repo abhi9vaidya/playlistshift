@@ -50,3 +50,4 @@ export function isValidSpotifyTrackUrl(url: string): boolean {
   const parsed = parseSpotifyUrl(url);
   return parsed?.type === 'track';
 }
+

@@ -126,7 +126,7 @@ export const SpotifyPlaylistTab: React.FC<SpotifyPlaylistTabProps> = ({
             {fallbackOffer && (
               <div className="pt-2 border-t border-brandRed/20">
                 <p className="text-xs text-textMuted mb-2">
-                  Spotify Web API credentials may be restricted or pending approval. You can seamlessly convert your playlist using our free CSV or text paste importer!
+                  Spotify Development Mode is limited to 5 authorized accounts per Spotify developer policy. You can seamlessly convert your playlist with zero limits using our free CSV or text paste importer below!
                 </p>
                 <Button
                   type="button"
@@ -153,3 +153,4 @@ export const SpotifyPlaylistTab: React.FC<SpotifyPlaylistTabProps> = ({
     </div>
   );
 };
+

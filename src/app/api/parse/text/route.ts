@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseTracksFromText } from "@/lib/parsing/text";
+import { siteConfig } from "@/config/site";
+
+const MAX_TEXT_SIZE_BYTES = 100 * 1024; // 100KB safety limit
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +13,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Please paste at least one song line." },
         { status: 400 }
+      );
+    }
+
+    if (text.length > MAX_TEXT_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: "Pasted text exceeds maximum size limit (100KB)." },
+        { status: 413 }
       );
     }
 
@@ -25,9 +35,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const maxAllowed = siteConfig.conversionLimits.maxTracksPerPlaylist;
+    let finalTracks = result.tracks;
+    if (finalTracks.length > maxAllowed) {
+      finalTracks = finalTracks.slice(0, maxAllowed);
+    }
+
     return NextResponse.json({
       success: true,
-      tracks: result.tracks,
+      tracks: finalTracks,
       duplicateCount: result.duplicateCount,
     });
   } catch (err: unknown) {

@@ -53,3 +53,4 @@ export const FAQ_DATA: FaqItem[] = [
     a: "Songs with common titles, live recordings, acoustic covers, or region-restricted videos can sometimes confuse search algorithms. PlaylistShift provides confidence scores (0-100) and lets you manually swap any match with one click.",
   },
 ];
+

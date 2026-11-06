@@ -5,11 +5,16 @@ const GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo";
 const GOOGLE_REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke";
 
+/**
+ * Least-privilege OAuth scopes:
+ * Requesting 'youtube.force-ssl' rather than the full 'youtube' scope to restrict access
+ * strictly to playlist and item management under SSL, as recommended by Google OAuth Verification.
+ */
 const SCOPES = [
   "openid",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
-  "https://www.googleapis.com/auth/youtube",
+  "https://www.googleapis.com/auth/youtube.force-ssl",
 ];
 
 export function isGoogleOAuthConfigured(): boolean {
@@ -29,7 +34,7 @@ export function getGoogleOAuthRedirectUri(origin?: string): string {
 }
 
 /**
- * Builds the Google OAuth 2.0 authorization URL with required YouTube scopes.
+ * Builds the Google OAuth 2.0 authorization URL with minimal required YouTube scopes.
  */
 export function getGoogleAuthUrl(state: string, redirectUri: string): string {
   const clientId = process.env.GOOGLE_CLIENT_ID || "";

@@ -62,6 +62,19 @@ Yellow,Coldplay,Parachutes`;
     expect(res.duplicateCount).toBe(0);
   });
 
+  it("supports semicolon and tab delimiters", () => {
+    const semicolonCsv = `Title;Artist\nBohemian Rhapsody;Queen\nHotel California;Eagles`;
+    const res1 = parseTracksFromCsv(semicolonCsv);
+    expect(res1.tracks.length).toBe(2);
+    expect(res1.tracks[0].title).toBe("Bohemian Rhapsody");
+    expect(res1.tracks[0].artist).toBe("Queen");
+
+    const tabCsv = "Title\tArtist\nYellow\tColdplay\nFix You\tColdplay";
+    const res2 = parseTracksFromCsv(tabCsv);
+    expect(res2.tracks.length).toBe(2);
+    expect(res2.tracks[0].title).toBe("Yellow");
+  });
+
   it("deduplicates identical tracks in CSV", () => {
     const csv = `Track Name,Artist
 Yellow,Coldplay
@@ -85,16 +98,53 @@ Hotel California,Eagles`;
   });
 });
 
-describe("Text Importer Parsing", () => {
-  it("parses 'Song - Artist' lines", () => {
-    const text = `Bohemian Rhapsody - Queen\nHotel California - Eagles\nYellow - Coldplay`;
-    const res = parseTracksFromText(text);
-    expect(res.tracks.length).toBe(3);
+describe("Text Importer Parsing & 20-Song Batch Verification", () => {
+  it("parses a full batch of 20 songs with numbering and whitespace variation", () => {
+    const raw20Songs = `1. Bohemian Rhapsody - Queen
+2. Hotel California - Eagles
+3. Yellow - Coldplay
+4. Blinding Lights - The Weeknd
+5. Stay With Me - Sam Smith
+6. Shape of You - Ed Sheeran
+7. Rolling in the Deep - Adele
+8. Someone Like You - Adele
+9. Viva La Vida - Coldplay
+10. Don't Stop Believin' - Journey
+11. Billi Jean - Michael Jackson
+12. Sweet Child O' Mine - Guns N' Roses
+13. Smells Like Teen Spirit - Nirvana
+14. Wonderwall - Oasis
+15. In The End - Linkin Park
+16. Lose Yourself - Eminem
+17. Take Me To Church - Hozier
+18. Bad Guy - Billie Eilish
+19. Uptown Funk - Mark Ronson ft. Bruno Mars
+20. As It Was - Harry Styles`;
+
+    const res = parseTracksFromText(raw20Songs);
+    expect(res.tracks.length).toBe(20);
+    expect(res.duplicateCount).toBe(0);
     expect(res.tracks[0].title).toBe("Bohemian Rhapsody");
     expect(res.tracks[0].artist).toBe("Queen");
+    expect(res.tracks[19].title).toBe("As It Was");
+    expect(res.tracks[19].artist).toBe("Harry Styles");
   });
 
-  it("strips numbered prefixes and bullet points", () => {
+  it("handles international characters and Unicode titles", () => {
+    const unicodeText = `Djadja - Aya Nakamura
+Échame La Culpa - Luis Fonsi
+春よ、来い - 松任谷由実
+Måneskin - Beggin'`;
+
+    const res = parseTracksFromText(unicodeText);
+    expect(res.tracks.length).toBe(4);
+    expect(res.tracks[0].title).toBe("Djadja");
+    expect(res.tracks[1].title).toBe("Échame La Culpa");
+    expect(res.tracks[2].title).toBe("春よ、来い");
+    expect(res.tracks[3].title).toBe("Måneskin");
+  });
+
+  it("strips numbered prefixes and bracket formats", () => {
     const text = `1. Bohemian Rhapsody - Queen\n02. Hotel California - Eagles\n[3] Yellow - Coldplay`;
     const res = parseTracksFromText(text);
     expect(res.tracks.length).toBe(3);

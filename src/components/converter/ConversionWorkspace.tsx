@@ -241,6 +241,21 @@ export const ConversionWorkspace: React.FC<ConversionWorkspaceProps> = ({
     }
   };
 
+  const handleMoveTrack = (trackId: string, direction: "up" | "down") => {
+    setPlaylist((prev) => {
+      const idx = prev.tracks.findIndex((t) => t.id === trackId);
+      if (idx === -1) return prev;
+      const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= prev.tracks.length) return prev;
+
+      const newTracks = [...prev.tracks];
+      const temp = newTracks[idx];
+      newTracks[idx] = newTracks[targetIdx];
+      newTracks[targetIdx] = temp;
+      return { ...prev, tracks: newTracks };
+    });
+  };
+
   const handleCreateYouTubePlaylist = async () => {
     if (!session.isAuthenticated) {
       // Redirect to Google OAuth
@@ -461,16 +476,23 @@ export const ConversionWorkspace: React.FC<ConversionWorkspaceProps> = ({
 
       {/* Track List */}
       <div className="space-y-2.5">
-        {filteredTracks.map((track, idx) => (
-          <TrackRow
-            key={track.id}
-            track={track}
-            index={idx}
-            onOpenManualMatch={setSelectedTrackForManual}
-            onToggleExclude={handleToggleExclude}
-            onRetrySearch={handleRetrySearch}
-          />
-        ))}
+        {filteredTracks.map((track, idx) => {
+          const originalIdx = playlist.tracks.findIndex((t) => t.id === track.id);
+          return (
+            <TrackRow
+              key={track.id}
+              track={track}
+              index={idx}
+              onOpenManualMatch={setSelectedTrackForManual}
+              onToggleExclude={handleToggleExclude}
+              onRetrySearch={handleRetrySearch}
+              onMoveUp={() => handleMoveTrack(track.id, "up")}
+              onMoveDown={() => handleMoveTrack(track.id, "down")}
+              canMoveUp={originalIdx > 0}
+              canMoveDown={originalIdx < playlist.tracks.length - 1}
+            />
+          );
+        })}
       </div>
 
       {/* YouTube Export Section (Section 4 & Section 9) */}
@@ -589,3 +611,4 @@ export const ConversionWorkspace: React.FC<ConversionWorkspaceProps> = ({
     </div>
   );
 };
+

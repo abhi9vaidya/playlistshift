@@ -95,3 +95,4 @@ function Lock(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+

@@ -68,37 +68,83 @@ export function scoreCandidate(
   const reasons: string[] = [];
 
   // 1. Title Similarity (0 to 45 points)
-  const titleDice = diceCoefficient(targetTitle, candidate.title);
-  const titleOverlap = tokenOverlap(targetTitle, candidate.title);
-  const titleMatchMetric = Math.max(titleDice, titleOverlap);
+  // Check against full candidate title
+  const fullTitleDice = diceCoefficient(targetTitle, candidate.title);
+  const fullTitleOverlap = tokenOverlap(targetTitle, candidate.title);
+
+  // Check against title segments (handling "Artist - Song Title" YouTube pattern)
+  const segments = candidate.title.split(/[-–—|]/);
+  let segmentDice = 0;
+  let segmentOverlap = 0;
+  for (const seg of segments) {
+    const d = diceCoefficient(targetTitle, seg.trim());
+    const o = tokenOverlap(targetTitle, seg.trim());
+    if (d > segmentDice) segmentDice = d;
+    if (o > segmentOverlap) segmentOverlap = o;
+  }
+
+  // Check exact word boundary match for short song titles (e.g. "Stay")
+  const wordBoundaryRegex = new RegExp(`\\b${normTargetTitle}\\b`, "i");
+  const hasExactTitleWord = wordBoundaryRegex.test(normVideoTitle);
+
+  let titleMatchMetric = Math.max(
+    fullTitleDice,
+    fullTitleOverlap,
+    segmentDice,
+    segmentOverlap
+  );
+
+  if (hasExactTitleWord && titleMatchMetric < 0.8) {
+    titleMatchMetric = Math.max(titleMatchMetric, 0.82);
+  }
 
   const titlePoints = Math.round(titleMatchMetric * 45);
   score += titlePoints;
-  if (titleMatchMetric > 0.85) {
+  if (titleMatchMetric >= 0.8) {
     reasons.push("Strong title match");
   }
 
   // 2. Artist Presence (0 to 30 points)
-  let artistFound = false;
-  const artistInChannel =
+  // Support multi-artist splits (e.g. "Coldplay, BTS", "Coldplay & BTS", "Artist ft. Other")
+  const artistParts = targetArtist
+    .split(/[,&x+/]|feat\.?|ft\.?/i)
+    .map((a) => normalizeSongText(a))
+    .filter((a) => a.length >= 2);
+
+  let artistInChannel =
     normChannel.includes(normTargetArtist) ||
     diceCoefficient(targetArtist, candidate.channelTitle) > 0.6;
-  const artistInTitle =
+
+  let artistInTitle =
     normVideoTitle.includes(normTargetArtist) ||
-    tokenOverlap(targetArtist, candidate.title) > 0.5;
-  const artistInDesc = normDesc.includes(normTargetArtist);
+    tokenOverlap(targetArtist, candidate.title) > 0.45;
+
+  let artistInDesc = normDesc.includes(normTargetArtist);
+
+  // If full artist string wasn't found directly, check constituent collaborators
+  if (!artistInChannel && !artistInTitle) {
+    for (const part of artistParts) {
+      if (normChannel.includes(part) || diceCoefficient(part, candidate.channelTitle) > 0.7) {
+        artistInChannel = true;
+        break;
+      }
+      if (normVideoTitle.includes(part) || tokenOverlap(part, candidate.title) > 0.6) {
+        artistInTitle = true;
+      }
+      if (normDesc.includes(part)) {
+        artistInDesc = true;
+      }
+    }
+  }
 
   if (artistInChannel) {
     score += 30;
-    artistFound = true;
     reasons.push("Artist matches channel");
   } else if (artistInTitle) {
-    score += 25;
-    artistFound = true;
+    score += 26;
     reasons.push("Artist found in video title");
   } else if (artistInDesc) {
     score += 15;
-    artistFound = true;
     reasons.push("Artist found in description");
   } else {
     // Penalty if artist is missing entirely

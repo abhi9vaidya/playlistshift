@@ -73,3 +73,4 @@ export const siteConfig = {
     defaultPrivacy: "private" as const,
   },
 };
+

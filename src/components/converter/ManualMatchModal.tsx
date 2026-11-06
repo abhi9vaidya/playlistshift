@@ -26,6 +26,14 @@ export const ManualMatchModal: React.FC<ManualMatchModalProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (isOpen && track) {
+      setSearchQuery(`${track.title} ${track.artist}`);
+      setCustomCandidates(null);
+      setSearchError(null);
+    }
+  }, [isOpen, track]);
+
   if (!track) return null;
 
   const currentMatch = track.matchedVideo;

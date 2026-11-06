@@ -15,10 +15,19 @@ export interface YouTubeCandidateRaw {
 
 export class YouTubeQuotaExceededError extends Error {
   constructor(
-    message = "YouTube Data API daily quota limit reached. Please try again tomorrow or sign in with your own Google account."
+    message = "YouTube Data API daily quota limit (10,000 units) reached. Please try again tomorrow or sign in with your own Google account."
   ) {
     super(message);
     this.name = "YouTubeQuotaExceededError";
+  }
+}
+
+export class YouTubeRateLimitExceededError extends Error {
+  constructor(
+    message = "YouTube search rate limit temporarily reached. Please wait a moment before searching more tracks."
+  ) {
+    super(message);
+    this.name = "YouTubeRateLimitExceededError";
   }
 }
 
@@ -100,8 +109,14 @@ export async function searchYouTubeVideos(
 
     if (!res.ok) {
       const errorReason = data?.error?.errors?.[0]?.reason || "";
-      if (errorReason === "quotaExceeded" || res.status === 403) {
+      if (errorReason === "quotaExceeded") {
         throw new YouTubeQuotaExceededError();
+      }
+      if (errorReason === "rateLimitExceeded" || errorReason === "userRateLimitExceeded" || res.status === 429) {
+        throw new YouTubeRateLimitExceededError();
+      }
+      if (res.status === 403) {
+        throw new Error(data?.error?.message || "YouTube API permission denied (403). Ensure YouTube Data API v3 is enabled in Google Cloud Console.");
       }
       throw new Error(data?.error?.message || `YouTube search failed with status ${res.status}`);
     }

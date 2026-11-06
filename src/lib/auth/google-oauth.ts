@@ -89,35 +89,48 @@ export async function exchangeCodeForTokens(
   };
 }
 
+const inFlightTokenRefreshes = new Map<string, Promise<{ accessToken: string; expiresIn: number }>>();
+
 export async function refreshAccessToken(refreshToken: string): Promise<{
   accessToken: string;
   expiresIn: number;
 }> {
-  const clientId = process.env.GOOGLE_CLIENT_ID || "";
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
-
-  const res = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }).toString(),
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error_description || "Failed to refresh Google access token");
+  if (inFlightTokenRefreshes.has(refreshToken)) {
+    return inFlightTokenRefreshes.get(refreshToken)!;
   }
 
-  return {
-    accessToken: data.access_token,
-    expiresIn: data.expires_in || 3600,
-  };
+  const promise = (async () => {
+    const clientId = process.env.GOOGLE_CLIENT_ID || "";
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+
+    const res = await fetch(GOOGLE_TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }).toString(),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error_description || "Failed to refresh Google access token");
+    }
+
+    return {
+      accessToken: data.access_token,
+      expiresIn: data.expires_in || 3600,
+    };
+  })().finally(() => {
+    inFlightTokenRefreshes.delete(refreshToken);
+  });
+
+  inFlightTokenRefreshes.set(refreshToken, promise);
+  return promise;
 }
 
 export async function getGoogleUserProfile(accessToken: string): Promise<{

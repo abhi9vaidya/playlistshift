@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { SpotifyPlaylistTab } from "./SpotifyPlaylistTab";
 import { SpotifyTrackTab } from "./SpotifyTrackTab";
 import { CsvTextTab } from "./CsvTextTab";
@@ -12,11 +12,40 @@ export const ConversionTool: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"playlist" | "track" | "csv">("playlist");
   const [activePlaylist, setActivePlaylist] = useState<PlaylistData | null>(null);
 
+  // Restore playlist from sessionStorage if user redirected back from Google OAuth
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("ps_active_playlist");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed.tracks) && parsed.tracks.length > 0) {
+          setActivePlaylist(parsed);
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  const handlePlaylistLoaded = (playlist: PlaylistData) => {
+    setActivePlaylist(playlist);
+    try {
+      sessionStorage.setItem("ps_active_playlist", JSON.stringify(playlist));
+    } catch {}
+  };
+
+  const handleReset = () => {
+    setActivePlaylist(null);
+    try {
+      sessionStorage.removeItem("ps_active_playlist");
+    } catch {}
+  };
+
   if (activePlaylist) {
     return (
       <ConversionWorkspace
         initialPlaylist={activePlaylist}
-        onReset={() => setActivePlaylist(null)}
+        onReset={handleReset}
       />
     );
   }
@@ -83,21 +112,20 @@ export const ConversionTool: React.FC = () => {
       <div className="relative z-10 pt-2">
         {activeTab === "playlist" && (
           <SpotifyPlaylistTab
-            onPlaylistLoaded={setActivePlaylist}
+            onPlaylistLoaded={handlePlaylistLoaded}
             onSwitchToCsv={() => setActiveTab("csv")}
           />
         )}
         {activeTab === "track" && (
           <SpotifyTrackTab
-            onPlaylistLoaded={setActivePlaylist}
+            onPlaylistLoaded={handlePlaylistLoaded}
             onSwitchToCsv={() => setActiveTab("csv")}
           />
         )}
         {activeTab === "csv" && (
-          <CsvTextTab onPlaylistLoaded={setActivePlaylist} />
+          <CsvTextTab onPlaylistLoaded={handlePlaylistLoaded} />
         )}
       </div>
     </div>
   );
 };
-

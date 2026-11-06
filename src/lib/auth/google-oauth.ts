@@ -29,7 +29,18 @@ export function isGoogleOAuthConfigured(): boolean {
 }
 
 export function getGoogleOAuthRedirectUri(origin?: string): string {
-  const base = origin || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  // Prefer explicit canonical environment variable if set
+  let base = process.env.NEXT_PUBLIC_APP_URL?.trim();
+
+  if (!base) {
+    base = origin?.trim() || "http://localhost:3000";
+  }
+
+  // Ensure HTTPS for any production or hosted domain (prevents reverse-proxy HTTP downgrade)
+  if (base.startsWith("http://") && !base.includes("localhost") && !base.includes("127.0.0.1")) {
+    base = base.replace("http://", "https://");
+  }
+
   return `${base.replace(/\/$/, "")}/api/auth/google/callback`;
 }
 

@@ -113,3 +113,4 @@ describe("Spotify Adapter & Dual-Mode Resolver", () => {
     expect(result.tracks[0].thumbnailUrl).toBe("https://example.com/single.jpg");
   });
 });
+
